@@ -2,7 +2,7 @@ import http.cookiejar
 import os
 
 from flask import Flask, Response
-import icalendar as icalendar
+import icalendar
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from datetime import datetime
