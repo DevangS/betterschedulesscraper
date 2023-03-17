@@ -1,12 +1,18 @@
 import http.cookiejar
+import os
+
+from flask import Flask, Response
+import icalendar as icalendar
 from selenium import webdriver
 from selenium.webdriver.common.by import By
-from datetime import datetime, date
+from datetime import datetime
 
 from secrets import USERNAME, PASSWORD
 
 # URL_TEMPLATE = 'https://portal.providerscience.com/account/signin?returnurl=/employee/schedule/?date=%s'
 URL_TEMPLATE = 'https://portal.providerscience.com/employee/schedule/?date=%s'
+
+app = Flask(__name__)
 
 
 def scrape_url_to_calendar():
@@ -16,6 +22,7 @@ def scrape_url_to_calendar():
         return datetime(year=date_obj.year, month=date_obj.month,
                         day=date_obj.day, hour=new_time.hour,
                         minute=new_time.minute)
+
     cookie_jar = http.cookiejar.MozillaCookieJar(filename="cookies.txt")
     cookie_jar.load()
 
@@ -100,6 +107,10 @@ def scrape_url_to_calendar():
                 start = _update_date_with_time(start, start_str)
                 end = _update_date_with_time(end, end_str)
 
+                # midnight ending shift ends the next day
+                if end.hour == 0 and end.minute == 0:
+                    end = end.replace(day=end.day + 1)
+
                 location = off[-1]
             else:
                 continue
@@ -108,5 +119,72 @@ def scrape_url_to_calendar():
     return events
 
 
+def create_ical(events, pharmacy='Kaiser', directory=os.getcwd()):
+    # Create calendar object
+    cal = icalendar.Calendar()
+    name = '%s Shifts' % pharmacy
+    cal.add('prodid', '-//%s//dayindev.com//' % name)
+    cal.add('version', '2.0')
+
+    # Create event object
+    for start, end, location in events:
+        event = icalendar.Event()
+        event.add('summary', location)
+        cal.add('version', '2.0')
+        cal.add('calscale', 'GREGORIAN')
+        cal.add('method', 'PUBLISH')
+        cal.add('x-wr-calname', name)
+        cal.add('x-wr-timezone', cal.add('x-wr-timezone', 'America/Los_Angeles'))
+
+        if start == end:
+            event.add('dtstart', start.date())  # Use DATE value for all-day event
+            event.add('dtend', start.date())  # Use DATE value for all-day event
+        else:
+            event.add('dtstart', start)
+            event.add('dtend', end)
+
+        event.add('dtstamp', datetime.now())
+
+        if location != 'PTO':
+            event.add('location', pharmacy + ' ' + location)
+
+        # Add event to calendar
+        cal.add_component(event)
+
+    # Generate iCal file
+    f = open(os.path.join(directory, '%s.ics' % pharmacy), 'wb')
+    f.write(cal.to_ical())
+    f.close()
+
+
+# Define a route to serve the iCalendar data
+@app.route('/<pharmacy>.ics')
+def serve_ical(pharmacy):
+    # Check if the calendar file exists
+    calendar_path = pharmacy + '.ics'
+    if not os.path.isfile(calendar_path):
+        return 400
+
+    # Serve the calendar file
+    with open(calendar_path, 'rb') as f:
+        calendar_data = f.read()
+    return Response(calendar_data, mimetype='text/calendar')
+
+
+@app.route('/update')
+def update_schedule():
+    events = scrape_url_to_calendar()
+    create_ical(events)
+
+    return 'Updated %s schedules' % len(events), 200
+
+
+# Define a route for a health check
+@app.route('/health')
+def health_check():
+    return 'OK', 200
+
+
+# Start the web server
 if __name__ == '__main__':
-    print(scrape_url_to_calendar())
+    app.run(debug=False, port=8000)
