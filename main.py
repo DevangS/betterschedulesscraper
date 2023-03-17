@@ -1,15 +1,21 @@
 import http.cookiejar
 from selenium import webdriver
 from selenium.webdriver.common.by import By
-from datetime import datetime
+from datetime import datetime, date
 
 from secrets import USERNAME, PASSWORD
 
-#URL_TEMPLATE = 'https://portal.providerscience.com/account/signin?returnurl=/employee/schedule/?date=%s'
+# URL_TEMPLATE = 'https://portal.providerscience.com/account/signin?returnurl=/employee/schedule/?date=%s'
 URL_TEMPLATE = 'https://portal.providerscience.com/employee/schedule/?date=%s'
 
 
-def run():
+def scrape_url_to_calendar():
+    def _update_date_with_time(date_obj: datetime, time_str: str) -> datetime:
+        regex = '%I:%M%p' if ':' in time_str else '%I%p'
+        new_time = datetime.strptime(time_str + 'm', regex)
+        return datetime(year=date_obj.year, month=date_obj.month,
+                        day=date_obj.day, hour=new_time.hour,
+                        minute=new_time.minute)
     cookie_jar = http.cookiejar.MozillaCookieJar(filename="cookies.txt")
     cookie_jar.load()
 
@@ -56,39 +62,51 @@ def run():
     scheduled_days = chrome_driver.find_elements(By.CLASS_NAME, "has-actions")
     print('Found %s schedules' % len(scheduled_days))
 
-    month = ''
+    month = None
+    events = []
     for day_div in all_days:
         if day_div.text:
             # Get the Month and Day
             date_text = day_div.find_element(By.CLASS_NAME, "title").text
             if len(date_text) > 2:
-                month, day = date_text.split(' ')
+                month, day_num = date_text.split(' ')
             else:
-                day = date_text
+                day_num = date_text
 
             if month is None:
                 continue
 
+            month_num = datetime.strptime(month, '%b').month
+            day_num = int(day_num)
+
             # Figure out type of day
+            start = datetime(month=month_num, day=day_num, year=datetime.today().year)
+            end = datetime(month=month_num, day=day_num, year=datetime.today().year)
+
             day_type = day_div.get_attribute("class")
             if 'is-off' in day_type:
                 # PTO
-                print (month, day, '00:00', '23:59', 'PTO')
+                location = 'PTO'
             elif 'non-month' in day_type:
                 # can't look ahead that far yet
                 continue
             elif 'has-actions' in day_type:
-                #scheduled to work
+                # scheduled to work
                 off_text = day_div.find_element(By.CLASS_NAME, "content")
                 off = off_text.text.split('\n')
                 time = off[0]
-                start, _, end = time.split(' ')
+                start_str, _, end_str = time.split(' ')
+
+                start = _update_date_with_time(start, start_str)
+                end = _update_date_with_time(end, end_str)
 
                 location = off[-1]
-                print(month, day, start, end, location)
+            else:
+                continue
 
+            events.append([start, end, location])
+    return events
 
 
 if __name__ == '__main__':
-    run()
-
+    print(scrape_url_to_calendar())
