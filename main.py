@@ -3,11 +3,10 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from datetime import datetime
 
+from secrets import USERNAME, PASSWORD
+
 #URL_TEMPLATE = 'https://portal.providerscience.com/account/signin?returnurl=/employee/schedule/?date=%s'
 URL_TEMPLATE = 'https://portal.providerscience.com/employee/schedule/?date=%s'
-USERNAME = ''
-PASSWORD = ''
-
 
 
 def run():
