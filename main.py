@@ -5,8 +5,8 @@ from flask import Flask, Response
 import icalendar
 from selenium import webdriver
 from selenium.webdriver.common.by import By
+from selenium.webdriver.chrome.options import Options
 from datetime import datetime
-
 from secret import USERNAME, PASSWORD
 
 # URL_TEMPLATE = 'https://portal.providerscience.com/account/signin?returnurl=/employee/schedule/?date=%s'
@@ -26,7 +26,9 @@ def scrape_url_to_calendar():
     cookie_jar = http.cookiejar.MozillaCookieJar(filename="cookies.txt")
     cookie_jar.load()
 
-    chrome_driver = webdriver.Chrome()
+    chrome_options = Options()
+    chrome_options.add_argument("--headless")
+    chrome_driver = webdriver.Chrome(options=chrome_options)
     url = URL_TEMPLATE % datetime.today().strftime('%m/%d/%Y')
     chrome_driver.get(url)
     for cookie in cookie_jar:
