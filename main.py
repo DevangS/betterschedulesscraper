@@ -28,6 +28,8 @@ def scrape_url_to_calendar():
 
     chrome_options = Options()
     chrome_options.add_argument("--headless")
+    chrome_options.add_argument("--disable-extensions")
+    chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_driver = webdriver.Chrome(options=chrome_options)
     url = URL_TEMPLATE % datetime.today().strftime('%m/%d/%Y')
     chrome_driver.get(url)
