@@ -10,6 +10,8 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
 from datetime import datetime
 from secret import USERNAME, PASSWORD
+import atexit
+from apscheduler.schedulers.background import BackgroundScheduler
 
 # URL_TEMPLATE = 'https://portal.providerscience.com/account/signin?returnurl=/employee/schedule/?date=%s'
 URL_TEMPLATE = 'https://portal.providerscience.com/employee/schedule/?date=%s'
@@ -186,10 +188,19 @@ def update_schedule():
     events = scrape_url_to_calendar()
     create_ical(events, directory='/tmp')
 
-    return 'Updated %s schedules' % len(events), 200
+    log = 'Updated %s schedules' % len(events)
+    print(log)
+    return log, 200
 
 
 # Define a route for a health check
 @app.route('/health')
 def health_check():
     return 'OK', 200
+
+scheduler = BackgroundScheduler()
+scheduler.add_job(func=update_schedule, trigger="interval", hours=12)
+scheduler.start()
+
+# Shut down the scheduler when exiting the app
+atexit.register(lambda: scheduler.shutdown())
