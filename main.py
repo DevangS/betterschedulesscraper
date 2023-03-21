@@ -1,5 +1,7 @@
 import http.cookiejar
 import os
+import pathlib
+from pathlib import Path
 
 from flask import Flask, Response
 import icalendar
@@ -23,28 +25,32 @@ def scrape_url_to_calendar():
                         day=date_obj.day, hour=new_time.hour,
                         minute=new_time.minute)
 
-    cookie_jar = http.cookiejar.MozillaCookieJar(filename="cookies.txt")
-    cookie_jar.load()
+    pathlib.Path('/tmp').mkdir(parents=True, exist_ok=True)
+    COOKIE_FILE = '/tmp/cookies.txt'
+
+    #cookie_jar = http.cookiejar.MozillaCookieJar(filename=COOKIE_FILE)
+    #cookie_jar.load()
 
     chrome_options = Options()
     chrome_options.add_argument("--headless")
+    chrome_options.add_argument('--no-sandbox')
     chrome_options.add_argument("--disable-extensions")
     chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_driver = webdriver.Chrome(options=chrome_options)
     url = URL_TEMPLATE % datetime.today().strftime('%m/%d/%Y')
     chrome_driver.get(url)
-    for cookie in cookie_jar:
-        chrome_driver.add_cookie(cookie.__dict__)
+    #for cookie in cookie_jar:
+    #    chrome_driver.add_cookie(cookie.__dict__)
     # chrome_driver.maximize_window()
 
-    if len(cookie_jar) == 0:
-        # login to the website
-        username_text_field = chrome_driver.find_element(By.ID, "Username")
-        username_text_field.send_keys(USERNAME)
+    # login to the website
+    username_text_field = chrome_driver.find_element(By.ID, "Username")
+    username_text_field.send_keys(USERNAME)
 
-        password_text_field = chrome_driver.find_element(By.ID, "Password")
-        password_text_field.send_keys(PASSWORD)
+    password_text_field = chrome_driver.find_element(By.ID, "Password")
+    password_text_field.send_keys(PASSWORD)
 
+    '''
         # save cookies for next time
         for cookie in chrome_driver.get_cookies():
             cookie_jar.set_cookie(http.cookiejar.Cookie(
@@ -66,7 +72,7 @@ def scrape_url_to_calendar():
                 rest=None
             ))
         cookie_jar.save()
-
+    '''
     chrome_driver.find_element(By.CLASS_NAME, "btn-signin").click()
 
     all_days = chrome_driver.find_elements(By.CLASS_NAME, "day")
@@ -165,7 +171,7 @@ def create_ical(events, pharmacy='Kaiser', directory=os.getcwd()):
 @app.route('/<pharmacy>.ics')
 def serve_ical(pharmacy):
     # Check if the calendar file exists
-    calendar_path = pharmacy + '.ics'
+    calendar_path = '/tmp/' + pharmacy + '.ics'
     if not os.path.isfile(calendar_path):
         return 400
 
@@ -178,7 +184,7 @@ def serve_ical(pharmacy):
 @app.route('/update')
 def update_schedule():
     events = scrape_url_to_calendar()
-    create_ical(events)
+    create_ical(events, '/tmp')
 
     return 'Updated %s schedules' % len(events), 200
 
