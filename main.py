@@ -169,14 +169,14 @@ def create_ical(events, pharmacy='Kaiser', directory=os.getcwd()):
 
 # Define a route to serve the iCalendar data
 @app.route('/<pharmacy>.ics')
-def serve_ical(pharmacy):
+def serve_ical(pharmacy, directory='/tmp'):
     # Check if the calendar file exists
-    calendar_path = '/tmp/' + pharmacy + '.ics'
-    if not os.path.isfile(calendar_path):
+    path = os.path.join(directory, '%s.ics' % pharmacy)
+    if not os.path.isfile(path):
         return 400
 
     # Serve the calendar file
-    with open(calendar_path, 'rb') as f:
+    with open(path, 'rb') as f:
         calendar_data = f.read()
     return Response(calendar_data, mimetype='text/calendar')
 
@@ -184,7 +184,7 @@ def serve_ical(pharmacy):
 @app.route('/update')
 def update_schedule():
     events = scrape_url_to_calendar()
-    create_ical(events, '/tmp')
+    create_ical(events, directory='/tmp')
 
     return 'Updated %s schedules' % len(events), 200
 
