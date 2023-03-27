@@ -1,25 +1,20 @@
-import http.cookiejar
 import os
 import pathlib
-from pathlib import Path
-
 from flask import Flask, Response
 import icalendar
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
-from datetime import datetime
+from datetime import datetime, timedelta
 from secret import USERNAME, PASSWORD
-import atexit
-from apscheduler.schedulers.background import BackgroundScheduler
 
-# URL_TEMPLATE = 'https://portal.providerscience.com/account/signin?returnurl=/employee/schedule/?date=%s'
+LOGIN_URL = 'https://portal.providerscience.com/account/signin'
 URL_TEMPLATE = 'https://portal.providerscience.com/employee/schedule/?date=%s'
 
 app = Flask(__name__)
 
 
-def scrape_url_to_calendar():
+def scrape_url_to_calendar(date=datetime.today()):
     def _update_date_with_time(date_obj: datetime, time_str: str) -> datetime:
         regex = '%I:%M%p' if ':' in time_str else '%I%p'
         new_time = datetime.strptime(time_str + 'm', regex)
@@ -28,106 +23,93 @@ def scrape_url_to_calendar():
                         minute=new_time.minute)
 
     pathlib.Path('/tmp').mkdir(parents=True, exist_ok=True)
-    COOKIE_FILE = '/tmp/cookies.txt'
-
-    #cookie_jar = http.cookiejar.MozillaCookieJar(filename=COOKIE_FILE)
-    #cookie_jar.load()
 
     chrome_options = Options()
     chrome_options.add_argument("--headless")
     chrome_options.add_argument('--no-sandbox')
     chrome_options.add_argument("--disable-extensions")
     chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--user-data-dir=selenium")
     chrome_driver = webdriver.Chrome(options=chrome_options)
-    url = URL_TEMPLATE % datetime.today().strftime('%m/%d/%Y')
-    chrome_driver.get(url)
-    #for cookie in cookie_jar:
-    #    chrome_driver.add_cookie(cookie.__dict__)
-    # chrome_driver.maximize_window()
 
     # login to the website
+    chrome_driver.get(LOGIN_URL)
     username_text_field = chrome_driver.find_element(By.ID, "Username")
     username_text_field.send_keys(USERNAME)
 
     password_text_field = chrome_driver.find_element(By.ID, "Password")
     password_text_field.send_keys(PASSWORD)
-
-    '''
-        # save cookies for next time
-        for cookie in chrome_driver.get_cookies():
-            cookie_jar.set_cookie(http.cookiejar.Cookie(
-                version=0,
-                name=cookie['name'],
-                value=cookie['value'],
-                port=None,
-                port_specified=False,
-                domain=cookie['domain'],
-                domain_specified=True,
-                domain_initial_dot=False,
-                path=cookie['path'],
-                path_specified=True,
-                secure=cookie['secure'],
-                expires=None,
-                discard=False,
-                comment=None,
-                comment_url=None,
-                rest=None
-            ))
-        cookie_jar.save()
-    '''
     chrome_driver.find_element(By.CLASS_NAME, "btn-signin").click()
+
+    # get the schedule
+    url = URL_TEMPLATE % date.strftime('%m/%Y')
+    chrome_driver.get(url)
 
     all_days = chrome_driver.find_elements(By.CLASS_NAME, "day")
     scheduled_days = chrome_driver.find_elements(By.CLASS_NAME, "has-actions")
-    print('Found %s schedules' % len(scheduled_days))
+    print('Found %s schedules on %s days' % (len(scheduled_days), len(all_days)))
 
-    month = None
+    month_num = None
     events = []
     for day_div in all_days:
-        if day_div.text:
-            # Get the Month and Day
-            date_text = day_div.find_element(By.CLASS_NAME, "title").text
-            if len(date_text) > 2:
-                month, day_num = date_text.split(' ')
-            else:
-                day_num = date_text
+        try:
+            if day_div.text:
+                classes = day_div.get_attribute('class')
 
-            if month is None:
-                continue
+                # Get the Month and Day
+                date_text = day_div.find_element(By.CLASS_NAME, "title").text
+                #print(date_text, classes)
+                if 'today' in classes:
+                    today = datetime.today()
+                    month_num = today.month
+                    day_num = today.day
+                elif len(date_text) > 2:
+                    month, day_num = date_text.split(' ')
+                    day_num = int(day_num)
+                    month_num = datetime.strptime(month, '%b').month
+                else:
+                    day_num = int(date_text)
+                    if month_num is not None and day_num == 1:
+                        print('increasing month')
+                        month_num = ((month_num + 1) % 12)
+                if 'non-month' not in classes:
+                    month_num = date.month
 
-            month_num = datetime.strptime(month, '%b').month
-            day_num = int(day_num)
+                if month_num is None:
+                    continue
 
-            # Figure out type of day
-            start = datetime(month=month_num, day=day_num, year=datetime.today().year)
-            end = datetime(month=month_num, day=day_num, year=datetime.today().year)
+                # Figure out type of day
+                start = datetime(month=month_num, day=day_num, year=datetime.today().year)
+                end = datetime(month=month_num, day=day_num, year=datetime.today().year)
 
-            day_type = day_div.get_attribute("class")
-            if 'is-off' in day_type:
-                # PTO
-                location = 'PTO'
-            elif 'non-month' in day_type:
-                # can't look ahead that far yet
-                continue
-            elif 'has-actions' in day_type:
-                # scheduled to work
-                off_text = day_div.find_element(By.CLASS_NAME, "content")
-                off = off_text.text.split('\n')
-                time = off[0]
-                start_str, _, end_str = time.split(' ')
+                day_type = day_div.get_attribute("class")
+                if 'is-off' in day_type:
+                    # PTO
+                    location = 'PTO'
+                elif 'non-month' in day_type:
+                    # can't look ahead that far yet
+                    continue
+                elif 'has-actions' in day_type:
+                    # scheduled to work
+                    off_text = day_div.find_element(By.CLASS_NAME, "content")
+                    off = off_text.text.split('\n')
+                    time = off[0]
+                    start_str, _, end_str = time.split(' ')
 
-                start = _update_date_with_time(start, start_str)
-                end = _update_date_with_time(end, end_str)
+                    start = _update_date_with_time(start, start_str)
+                    end = _update_date_with_time(end, end_str)
 
-                # midnight ending shift ends the next day
-                if end.hour == 0 and end.minute == 0:
-                    end = end.replace(day=end.day + 1)
+                    # midnight ending shift ends the next day
+                    if end.hour == 0 and end.minute == 0:
+                        end = end.replace(day=end.day + 1)
 
-                location = off[-1]
-            else:
-                continue
+                    location = off[-1]
+                else:
+                    continue
 
-            events.append([start, end, location])
+                events.append((start, end, location))
+        except Exception as e:
+            continue
     return events
 
 
@@ -185,8 +167,12 @@ def serve_ical(pharmacy, directory='/tmp'):
 
 @app.route('/update')
 def update_schedule():
-    events = scrape_url_to_calendar()
-    create_ical(events, directory='/tmp')
+    events = set([])
+    for date in [datetime.today(),
+                 datetime.today() + timedelta(days=30)]:
+        result = scrape_url_to_calendar(date)
+        events.update(set(result))
+    create_ical(sorted(events, key=lambda x: x[0]), directory='/tmp')
 
     log = 'Updated %s schedules' % len(events)
     print(log)
@@ -198,9 +184,5 @@ def update_schedule():
 def health_check():
     return 'OK', 200
 
-scheduler = BackgroundScheduler()
-scheduler.add_job(func=update_schedule, trigger="interval", hours=12)
-scheduler.start()
-
-# Shut down the scheduler when exiting the app
-atexit.register(lambda: scheduler.shutdown())
+if __name__ == '__main__':
+    update_schedule()
