@@ -22,14 +22,14 @@ def scrape_url_to_calendar(date=datetime.today()):
                         day=date_obj.day, hour=new_time.hour,
                         minute=new_time.minute)
 
-    pathlib.Path('/tmp').mkdir(parents=True, exist_ok=True)
+    pathlib.Path('/tmp/selenium').mkdir(parents=True, exist_ok=True)
 
     chrome_options = Options()
     chrome_options.add_argument("--headless")
     chrome_options.add_argument('--no-sandbox')
     chrome_options.add_argument("--disable-extensions")
     chrome_options.add_argument("--disable-dev-shm-usage")
-    chrome_options.add_argument("--user-data-dir=selenium")
+    chrome_options.add_argument("--user-data-dir=/tmp/selenium")
     chrome_driver = webdriver.Chrome(options=chrome_options)
 
     # login to the website
@@ -99,8 +99,8 @@ def scrape_url_to_calendar(date=datetime.today()):
                     start = _update_date_with_time(start, start_str)
                     end = _update_date_with_time(end, end_str)
 
-                    # midnight ending shift ends the next day
-                    if end.hour == 0 and end.minute == 0:
+                    # some shifts go overnight so end the next day
+                    if end < start:
                         end = end.replace(day=end.day + 1)
 
                     location = off[-1]
