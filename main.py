@@ -1,5 +1,7 @@
 import os
 import pathlib
+
+import pytz
 from flask import Flask, Response
 import icalendar
 from selenium import webdriver
@@ -113,29 +115,30 @@ def scrape_url_to_calendar(date=datetime.today()):
     return events
 
 
-def create_ical(events, pharmacy='Kaiser', directory=os.getcwd()):
+def create_ical(events, pharmacy='Kaiser', directory=os.getcwd(), timezone='America/Los_Angeles'):
     # Create calendar object
     cal = icalendar.Calendar()
     name = '%s Shifts' % pharmacy
     cal.add('prodid', '-//%s//dayindev.com//' % name)
     cal.add('version', '2.0')
 
+    # Initialize timezone
+    tz = pytz.timezone(timezone)
+
+    # Set calendar timezone
+    cal.add('x-wr-timezone', timezone)
+
     # Create event object
     for start, end, location in events:
         event = icalendar.Event()
         event.add('summary', location)
-        cal.add('version', '2.0')
-        cal.add('calscale', 'GREGORIAN')
-        cal.add('method', 'PUBLISH')
-        cal.add('x-wr-calname', name)
-        cal.add('x-wr-timezone', cal.add('x-wr-timezone', 'America/Los_Angeles'))
 
         if start == end:
             event.add('dtstart', start.date())  # Use DATE value for all-day event
             event.add('dtend', start.date())  # Use DATE value for all-day event
         else:
-            event.add('dtstart', start)
-            event.add('dtend', end)
+            event.add('dtstart', tz.localize(start))
+            event.add('dtend', tz.localize(end))
 
         event.add('dtstamp', datetime.now())
 
