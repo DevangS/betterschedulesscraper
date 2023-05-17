@@ -8,13 +8,14 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
 from datetime import datetime, timedelta
-from secret import USERNAME, PASSWORD
 
 LOGIN_URL = 'https://portal.providerscience.com/account/signin'
 URL_TEMPLATE = 'https://portal.providerscience.com/employee/schedule/?date=%s'
 
 app = Flask(__name__)
 
+USERNAME = os.environ.get('USERNAME')
+PASSWORD = os.environ.get('PASSWORD')
 
 def scrape_url_to_calendar(date=datetime.today()):
     def _update_date_with_time(date_obj: datetime, time_str: str) -> datetime:
