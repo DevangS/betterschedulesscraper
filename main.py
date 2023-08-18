@@ -168,6 +168,15 @@ def serve_ical(pharmacy, directory='/tmp'):
     return Response(calendar_data, mimetype='text/calendar')
 
 
+def read_ical(path='/tmp/Kaiser.ics'):
+    with open(path, 'rb') as f:
+        calendar_data = f.read()
+
+    cal = icalendar.Calendar.from_ical(calendar_data)
+    for component in cal.walk():
+        print(component)
+
+
 @app.route('/update')
 def update_schedule():
     events = set([])
