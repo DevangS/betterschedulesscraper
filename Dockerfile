@@ -2,6 +2,7 @@ FROM selenium/standalone-chrome:latest
 
 RUN sudo apt-get update
 RUN sudo apt-get install -y python3 python3-pip gunicorn
+RUN sudo apt autoremove && sudo apt clean
 
 COPY . /app
 WORKDIR app
@@ -12,4 +13,4 @@ EXPOSE 8080
 ENV FLASK_APP main.py
 
 # Set the command to start the Flask app
-CMD ["gunicorn", "main:app", "-b", "0.0.0.0:8080", "--workers=1"]
+CMD ["gunicorn", "-b", "0.0.0.0:8080", "main:app"]
