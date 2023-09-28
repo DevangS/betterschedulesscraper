@@ -14,8 +14,14 @@ URL_TEMPLATE = 'https://portal.providerscience.com/employee/schedule/?date=%s'
 
 app = Flask(__name__)
 
-USERNAME = os.environ.get('USERNAME')
-PASSWORD = os.environ.get('PASSWORD')
+try:
+    from secret import USERNAME, PASSWORD
+except ModuleNotFoundError:
+    USERNAME = os.environ.get('USERNAME')
+    PASSWORD = os.environ.get('PASSWORD')
+
+STORAGE_DIR = '/tmp'
+
 
 def scrape_url_to_calendar(date=datetime.today()):
     def _update_date_with_time(date_obj: datetime, time_str: str) -> datetime:
@@ -155,12 +161,19 @@ def create_ical(events, pharmacy='Kaiser', directory=os.getcwd(), timezone='Amer
     f.close()
 
 
+def _get_pharmacy_ics_path(pharmacy):
+    path = os.path.join(STORAGE_DIR, '%s.ics' % pharmacy)
+    if not os.path.isfile(path):
+        return None
+    return path
+
+
 # Define a route to serve the iCalendar data
 @app.route('/<pharmacy>.ics')
-def serve_ical(pharmacy, directory='/tmp'):
+def serve_ical(pharmacy):
     # Check if the calendar file exists
-    path = os.path.join(directory, '%s.ics' % pharmacy)
-    if not os.path.isfile(path):
+    path = _get_pharmacy_ics_path(pharmacy)
+    if not path:
         return 400
 
     # Serve the calendar file
@@ -176,9 +189,11 @@ def update_schedule():
                  datetime.today() + timedelta(days=30)]:
         result = scrape_url_to_calendar(date)
         events.update(set(result))
-    create_ical(sorted(events, key=lambda x: x[0]), directory='/tmp')
+    sorted_events = sorted(events, key=lambda x: x[0])
 
-    log = 'Updated %s schedules' % len(events)
+    create_ical(sorted_events, directory='/tmp')
+
+    log = 'Updated %s schedules. Latest shift is %s' % (len(events), [str(_) for _ in sorted_events[-1]])
     print(log)
     return log, 200
 
