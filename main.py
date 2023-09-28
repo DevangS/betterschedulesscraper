@@ -2,6 +2,7 @@ import os
 import pathlib
 
 import pytz
+from apscheduler.schedulers.background import BackgroundScheduler
 from flask import Flask, Response
 import icalendar
 from selenium import webdriver
@@ -203,6 +204,10 @@ def update_schedule():
 def health_check():
     return 'OK', 200
 
+
+sched = BackgroundScheduler(daemon=True)
+sched.add_job(update_schedule, 'interval', minutes=60)
+sched.start()
 
 if __name__ == '__main__':
     update_schedule()
