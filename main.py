@@ -2,6 +2,7 @@ import os
 import pathlib
 
 import pytz
+from apscheduler.executors.pool import ThreadPoolExecutor
 from apscheduler.schedulers.background import BackgroundScheduler
 from flask import Flask, Response
 import icalendar
@@ -22,7 +23,7 @@ except ModuleNotFoundError:
     PASSWORD = os.environ.get('PASSWORD')
 
 STORAGE_DIR = '/tmp'
-
+updated = None
 
 def scrape_url_to_calendar(date=datetime.today()):
     def _update_date_with_time(date_obj: datetime, time_str: str) -> datetime:
@@ -194,9 +195,18 @@ def update_schedule():
 
     create_ical(sorted_events, directory='/tmp')
 
+    # we dont believe in thread safety here
+    global updated
+    updated = datetime.now()
+
     log = 'Updated %s schedules. Latest shift is %s' % (len(events), [str(_) for _ in sorted_events[-1]])
     print(log)
     return log, 200
+
+
+@app.route('/last_updated')
+def last_updated():
+    return str(updated), 200
 
 
 # Define a route for a health check
@@ -205,7 +215,10 @@ def health_check():
     return 'OK', 200
 
 
-sched = BackgroundScheduler(daemon=True)
+sched = BackgroundScheduler(daemon=True,
+                            executors={
+                                'threadpool': ThreadPoolExecutor(max_workers=1),
+                            })
 sched.add_job(update_schedule, 'interval', minutes=60)
 sched.start()
 
