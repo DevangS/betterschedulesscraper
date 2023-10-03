@@ -25,6 +25,7 @@ except ModuleNotFoundError:
 STORAGE_DIR = '/tmp'
 updated = None
 
+
 def scrape_url_to_calendar(date=datetime.today()):
     def _update_date_with_time(date_obj: datetime, time_str: str) -> datetime:
         regex = '%I:%M%p' if ':' in time_str else '%I%p'
@@ -69,7 +70,7 @@ def scrape_url_to_calendar(date=datetime.today()):
 
                 # Get the Month and Day
                 date_text = day_div.find_element(By.CLASS_NAME, "title").text
-                #print(date_text, classes)
+                # print(date_text, classes)
                 if 'today' in classes:
                     today = datetime.today()
                     month_num = today.month
@@ -215,10 +216,14 @@ def health_check():
     return 'OK', 200
 
 
-sched = BackgroundScheduler(daemon=True,
-                            executors={
-                                'threadpool': ThreadPoolExecutor(max_workers=1),
-                            })
+sched = BackgroundScheduler({
+    'apscheduler.executors.default': {
+        'class': 'apscheduler.executors.pool:ThreadPoolExecutor',
+        'max_workers': '1'
+    },
+    'apscheduler.job_defaults.coalesce': 'false',
+    'apscheduler.job_defaults.max_instances': '1',
+})
 sched.add_job(update_schedule, 'interval', minutes=60)
 sched.start()
 
