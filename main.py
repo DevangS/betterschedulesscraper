@@ -63,6 +63,7 @@ def scrape_url_to_calendar(date=datetime.today()):
 
     month_num = None
     events = []
+
     for day_div in all_days:
         try:
             if day_div.text:
@@ -70,7 +71,8 @@ def scrape_url_to_calendar(date=datetime.today()):
 
                 # Get the Month and Day
                 date_text = day_div.find_element(By.CLASS_NAME, "title").text
-                # print(date_text, classes)
+                off_text = day_div.find_element(By.CLASS_NAME, "content").text
+
                 if 'today' in classes:
                     today = datetime.today()
                     month_num = today.month
@@ -94,17 +96,15 @@ def scrape_url_to_calendar(date=datetime.today()):
                 start = datetime(month=month_num, day=day_num, year=datetime.today().year)
                 end = datetime(month=month_num, day=day_num, year=datetime.today().year)
 
-                day_type = day_div.get_attribute("class")
-                if 'is-off' in day_type:
+                if 'is-off' in classes:
                     # PTO
                     location = 'PTO'
-                elif 'non-month' in day_type:
+                elif 'non-month' in classes:
                     # can't look ahead that far yet
                     continue
-                elif 'has-actions' in day_type:
+                elif 'has-actions' in classes:
                     # scheduled to work
-                    off_text = day_div.find_element(By.CLASS_NAME, "content")
-                    off = off_text.text.split('\n')
+                    off = off_text.split('\n')
                     time = off[0]
                     start_str, _, end_str = time.split(' ')
 
