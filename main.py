@@ -26,7 +26,7 @@ STORAGE_DIR = '/tmp'
 updated = None
 
 
-def scrape_url_to_calendar(date=datetime.today()):
+def scrape_url_to_calendar(dates=[datetime.today()]):
     def _update_date_with_time(date_obj: datetime, time_str: str) -> datetime:
         regex = '%I:%M%p' if ':' in time_str else '%I%p'
         new_time = datetime.strptime(time_str + 'm', regex)
@@ -53,75 +53,77 @@ def scrape_url_to_calendar(date=datetime.today()):
     password_text_field.send_keys(PASSWORD)
     chrome_driver.find_element(By.CLASS_NAME, "btn-signin").click()
 
-    # get the schedule
-    url = URL_TEMPLATE % date.strftime('%m/%Y')
-    chrome_driver.get(url)
+    events = set([])
+    for date in dates:
+        # get the schedule
+        url = URL_TEMPLATE % date.strftime('%m/%Y')
+        chrome_driver.get(url)
 
-    all_days = chrome_driver.find_elements(By.CLASS_NAME, "day")
-    scheduled_days = chrome_driver.find_elements(By.CLASS_NAME, "has-actions")
-    print('Found %s schedules on %s days' % (len(scheduled_days), len(all_days)))
+        all_days = chrome_driver.find_elements(By.CLASS_NAME, "day")
+        scheduled_days = chrome_driver.find_elements(By.CLASS_NAME, "has-actions")
+        print('Found %s schedules on %s days for date %s' % (len(scheduled_days), len(all_days), date))
 
-    month_num = None
-    events = []
+        month_num = None
+    
 
-    for day_div in all_days:
-        try:
-            if day_div.text:
-                classes = day_div.get_attribute('class')
+        for day_div in all_days:
+            try:
+                if day_div.text:
+                    classes = day_div.get_attribute('class')
 
-                # Get the Month and Day
-                date_text = day_div.find_element(By.CLASS_NAME, "title").text
-                off_text = day_div.find_element(By.CLASS_NAME, "content").text
+                    # Get the Month and Day
+                    date_text = day_div.find_element(By.CLASS_NAME, "title").text
+                    off_text = day_div.find_element(By.CLASS_NAME, "content").text
 
-                if 'today' in classes:
-                    today = datetime.today()
-                    month_num = today.month
-                    day_num = today.day
-                elif len(date_text) > 2:
-                    month, day_num = date_text.split(' ')
-                    day_num = int(day_num)
-                    month_num = datetime.strptime(month, '%b').month
-                else:
-                    day_num = int(date_text)
-                    if month_num is not None and day_num == 1:
-                        print('increasing month')
-                        month_num = ((month_num + 1) % 12)
-                if 'non-month' not in classes:
-                    month_num = date.month
+                    if 'today' in classes:
+                        today = datetime.today()
+                        month_num = today.month
+                        day_num = today.day
+                    elif len(date_text) > 2:
+                        month, day_num = date_text.split(' ')
+                        day_num = int(day_num)
+                        month_num = datetime.strptime(month, '%b').month
+                    else:
+                        day_num = int(date_text)
+                        if month_num is not None and day_num == 1:
+                            print('increasing month')
+                            month_num = ((month_num + 1) % 12)
+                    if 'non-month' not in classes:
+                        month_num = date.month
 
-                if month_num is None:
-                    continue
+                    if month_num is None:
+                        continue
 
-                # Figure out type of day
-                start = datetime(month=month_num, day=day_num, year=datetime.today().year)
-                end = datetime(month=month_num, day=day_num, year=datetime.today().year)
+                    # Figure out type of day
+                    start = datetime(month=month_num, day=day_num, year=datetime.today().year)
+                    end = datetime(month=month_num, day=day_num, year=datetime.today().year)
 
-                if 'is-off' in classes:
-                    # PTO
-                    location = 'PTO'
-                elif 'non-month' in classes:
-                    # can't look ahead that far yet
-                    continue
-                elif 'has-actions' in classes:
-                    # scheduled to work
-                    off = off_text.split('\n')
-                    time = off[0]
-                    start_str, _, end_str = time.split(' ')
+                    if 'is-off' in classes:
+                        # PTO
+                        location = 'PTO'
+                    elif 'non-month' in classes:
+                        # can't look ahead that far yet
+                        continue
+                    elif 'has-actions' in classes:
+                        # scheduled to work
+                        off = off_text.split('\n')
+                        time = off[0]
+                        start_str, _, end_str = time.split(' ')
 
-                    start = _update_date_with_time(start, start_str)
-                    end = _update_date_with_time(end, end_str)
+                        start = _update_date_with_time(start, start_str)
+                        end = _update_date_with_time(end, end_str)
 
-                    # some shifts go overnight so end the next day
-                    if end < start:
-                        end = end.replace(day=end.day + 1)
+                        # some shifts go overnight so end the next day
+                        if end < start:
+                            end = end.replace(day=end.day + 1)
 
-                    location = off[-1]
-                else:
-                    continue
+                        location = off[-1]
+                    else:
+                        continue
 
-                events.append((start, end, location))
-        except Exception as e:
-            continue
+                    events.add((start, end, location))
+            except Exception as e:
+                continue
     return events
 
 
@@ -187,11 +189,8 @@ def serve_ical(pharmacy):
 
 @app.route('/update')
 def update_schedule():
-    events = set([])
-    for date in [datetime.today(),
-                 datetime.today() + timedelta(days=30)]:
-        result = scrape_url_to_calendar(date)
-        events.update(set(result))
+    dates = [datetime.today(), datetime.today() + timedelta(days=30)]
+    events = scrape_url_to_calendar(dates)
     sorted_events = sorted(events, key=lambda x: x[0])
 
     create_ical(sorted_events, directory='/tmp')
