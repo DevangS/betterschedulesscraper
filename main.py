@@ -9,6 +9,7 @@ import icalendar
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
 from datetime import datetime, timedelta
 
 LOGIN_URL = 'https://portal.providerscience.com/account/signin'
@@ -37,12 +38,16 @@ def scrape_url_to_calendar(dates=[datetime.today()]):
     pathlib.Path('/tmp/selenium').mkdir(parents=True, exist_ok=True)
 
     chrome_options = Options()
+    # Specify the service with the exact path to chromedriver
+    service = Service('/usr/bin/chromedriver')
+
     chrome_options.add_argument("--headless")
     chrome_options.add_argument('--no-sandbox')
     chrome_options.add_argument("--disable-extensions")
     chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument("--user-data-dir=/tmp/selenium")
-    chrome_driver = webdriver.Chrome(options=chrome_options)
+    chrome_options.add_argument("--remote-debugging-port=9222")
+    chrome_driver = webdriver.Chrome(options=chrome_options, service=service)
 
     # login to the website
     chrome_driver.get(LOGIN_URL)
@@ -223,7 +228,7 @@ sched = BackgroundScheduler({
     'apscheduler.job_defaults.coalesce': 'false',
     'apscheduler.job_defaults.max_instances': '1',
 })
-sched.add_job(update_schedule, 'interval', minutes=60)
+sched.add_job(update_schedule, 'interval', minutes=5)
 sched.start()
 
 if __name__ == '__main__':
