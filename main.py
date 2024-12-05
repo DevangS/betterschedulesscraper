@@ -80,11 +80,7 @@ def scrape_url_to_calendar(dates=[datetime.today()]):
                     date_text = day_div.find_element(By.CLASS_NAME, "title").text
                     off_text = day_div.find_element(By.CLASS_NAME, "content").text
 
-                    if 'today' in classes:
-                        today = datetime.today()
-                        month_num = today.month
-                        day_num = today.day
-                    elif len(date_text) > 2:
+                    if len(date_text) > 2:
                         month, day_num = date_text.split(' ')
                         day_num = int(day_num)
                         month_num = datetime.strptime(month, '%b').month
