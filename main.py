@@ -224,7 +224,7 @@ sched = BackgroundScheduler({
     'apscheduler.job_defaults.coalesce': 'false',
     'apscheduler.job_defaults.max_instances': '1',
 })
-sched.add_job(update_schedule, 'interval', minutes=5)
+sched.add_job(update_schedule, 'interval', minutes=300)
 sched.start()
 
 if __name__ == '__main__':
