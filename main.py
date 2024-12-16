@@ -28,7 +28,7 @@ STORAGE_DIR = '/tmp'
 updated = None
 
 
-def scrape_url_to_calendar(dates=[datetime.today()]):
+def scrape_url_to_calendar(dates):
     def _update_date_with_time(date_obj: datetime, time_str: str) -> datetime:
         regex = '%I:%M%p' if ':' in time_str else '%I%p'
         new_time = datetime.strptime(time_str + 'm', regex)
@@ -69,45 +69,24 @@ def scrape_url_to_calendar(dates=[datetime.today()]):
         scheduled_days = chrome_driver.find_elements(By.CLASS_NAME, "has-actions")
         print('Found %s schedules on %s days for date %s' % (len(scheduled_days), len(all_days), date))
 
-        month_num = None
-    
 
         for day_div in all_days:
             try:
                 if day_div.text:
                     classes = day_div.get_attribute('class')
 
-                    # Get the Month and Day
-                    date_text = day_div.find_element(By.CLASS_NAME, "title").text
-                    off_text = day_div.find_element(By.CLASS_NAME, "content").text
+                    if 'has-actions' in classes:
+                        # get the shift start date
+                        shift_element = day_div.find_element(By.CLASS_NAME, "shift-v2")
+                        shift_id = shift_element.get_attribute("data-shift-id")
+                        shift_date = shift_id.split(':')[-1]
 
-                    if len(date_text) > 2:
-                        month, day_num = date_text.split(' ')
-                        day_num = int(day_num)
-                        month_num = datetime.strptime(month, '%b').month
-                    else:
-                        day_num = int(date_text)
-                        if month_num is not None and day_num == 1:
-                            print('increasing month')
-                            month_num = ((month_num + 1) % 12)
-                    if 'non-month' not in classes:
-                        month_num = date.month
+                        # create datetime objects for start and end
+                        start = datetime.strptime(shift_date, '%Y%m%d')
+                        end = datetime.strptime(shift_date, '%Y%m%d')
 
-                    if month_num is None:
-                        continue
-
-                    # Figure out type of day
-                    start = datetime(month=month_num, day=day_num, year=datetime.today().year)
-                    end = datetime(month=month_num, day=day_num, year=datetime.today().year)
-
-                    if 'is-off' in classes:
-                        # PTO
-                        location = 'PTO'
-                    elif 'non-month' in classes:
-                        # can't look ahead that far yet
-                        continue
-                    elif 'has-actions' in classes:
-                        # scheduled to work
+                        # get the shift schedule time
+                        off_text = day_div.find_element(By.CLASS_NAME, "content").text
                         off = off_text.split('\n')
                         time = off[0]
                         start_str, _, end_str = time.split(' ')
@@ -120,10 +99,10 @@ def scrape_url_to_calendar(dates=[datetime.today()]):
                             end = end.replace(day=end.day + 1)
 
                         location = off[-1]
+                        events.add((start, end, location))
                     else:
                         continue
 
-                    events.add((start, end, location))
             except Exception as e:
                 continue
     return events
