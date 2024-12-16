@@ -10,6 +10,7 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
 from datetime import datetime, timedelta
 
 LOGIN_URL = 'https://portal.providerscience.com/account/signin'
@@ -39,7 +40,7 @@ def scrape_url_to_calendar(dates=[datetime.today()]):
 
     chrome_options = Options()
     # Specify the service with the exact path to chromedriver
-    service = Service('/usr/bin/chromedriver')
+    service = Service(ChromeDriverManager().install())
 
     chrome_options.add_argument("--headless")
     chrome_options.add_argument('--no-sandbox')
