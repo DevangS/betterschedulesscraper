@@ -194,7 +194,7 @@ def update_schedule():
     events = scrape_url_to_calendar(dates)
     sorted_events = sorted(events, key=lambda x: x[0])
 
-    create_ical(sorted_events, directory='/tmp')
+    create_ical(sorted_events, directory=STORAGE_DIR)
 
     # we dont believe in thread safety here
     global updated
