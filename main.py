@@ -39,8 +39,12 @@ def scrape_url_to_calendar(dates):
     pathlib.Path('/tmp/selenium').mkdir(parents=True, exist_ok=True)
 
     chrome_options = Options()
-    # Specify the service with the exact path to chromedriver
-    service = Service(ChromeDriverManager().install())
+
+    # check if chrome is already installed (arm64 installation is annoying with driver manager
+    if os.path.exists('/usr/bin/chromedriver'):
+        service = Service('/usr/bin/chromedriver')
+    else:
+        service = Service(ChromeDriverManager().install())
 
     chrome_options.add_argument("--headless")
     chrome_options.add_argument('--no-sandbox')
