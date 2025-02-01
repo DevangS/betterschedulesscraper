@@ -12,6 +12,9 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 from datetime import datetime, timedelta
+from selenium.common.exceptions import NoSuchElementException
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 
 LOGIN_URL = 'https://portal.providerscience.com/account/signin'
 URL_TEMPLATE = 'https://portal.providerscience.com/employee/schedule/?date=%s'
@@ -68,47 +71,108 @@ def scrape_url_to_calendar(dates):
         # get the schedule
         url = URL_TEMPLATE % date.strftime('%m/%Y')
         chrome_driver.get(url)
+        
+        # Wait for the calendar to load
+        try:
+            WebDriverWait(chrome_driver, 10).until(
+                EC.presence_of_element_located((By.CLASS_NAME, "day"))
+            )
+        except Exception as e:
+            print(f"Timeout waiting for calendar to load: {e}")
+            continue
 
         all_days = chrome_driver.find_elements(By.CLASS_NAME, "day")
         scheduled_days = chrome_driver.find_elements(By.CLASS_NAME, "has-actions")
         print('Found %s schedules on %s days for date %s' % (len(scheduled_days), len(all_days), date))
 
-
-        for day_div in all_days:
+        for i, day_div in enumerate(all_days):
             try:
-                if day_div.text:
-                    classes = day_div.get_attribute('class')
+                # Get a fresh reference to the day div
+                day_div = chrome_driver.find_elements(By.CLASS_NAME, "day")[i]
+                if not day_div.get_attribute('textContent'):
+                    continue
+                
+                classes = day_div.get_attribute('class')
+                if 'has-actions' not in classes:
+                    continue
 
-                    if 'has-actions' in classes:
-                        # get the shift start date
-                        shift_element = day_div.find_element(By.CLASS_NAME, "shift-v2")
-                        shift_id = shift_element.get_attribute("data-shift-id")
-                        shift_date = shift_id.split(':')[-1]
+                # get the day number for better error reporting
+                try:
+                    day_number = day_div.find_element(By.CLASS_NAME, "title").text
+                except NoSuchElementException:
+                    print("Could not find day number for a day")
+                    continue
 
-                        # create datetime objects for start and end
-                        start = datetime.strptime(shift_date, '%Y%m%d')
-                        end = datetime.strptime(shift_date, '%Y%m%d')
+                # Try to find shifts div
+                try:
+                    shifts_div = day_div.find_element(By.CLASS_NAME, "shifts")
+                except NoSuchElementException:
+                    continue
 
-                        # get the shift schedule time
-                        off_text = day_div.find_element(By.CLASS_NAME, "content").text
-                        off = off_text.split('\n')
-                        time = off[0]
-                        start_str, _, end_str = time.split(' ')
+                # Try to find shift element
+                try:
+                    shift_element = shifts_div.find_element(By.XPATH, ".//div[contains(@class, 'shift-v2')]")
+                except NoSuchElementException:
+                    print(f"No shift element found for day {day_number}")
+                    continue
 
-                        start = _update_date_with_time(start, start_str)
-                        end = _update_date_with_time(end, end_str)
+                # Get shift ID
+                shift_id = shift_element.get_attribute("data-shift-id")
+                if shift_id is None:
+                    print(f"No shift ID found for day {day_number}")
+                    continue
 
-                        # some shifts go overnight so end the next day
-                        if end < start:
-                            end = end.replace(day=end.day + 1)
+                # Try to get time element
+                try:
+                    content_div = shift_element.find_element(By.CLASS_NAME, "content")
+                    time_element = content_div.find_element(By.CLASS_NAME, "content-item")
+                except NoSuchElementException:
+                    print(f"Could not find time element for day {day_number}")
+                    continue
 
-                        location = off[-1]
-                        events.add((start, end, location))
-                    else:
-                        continue
+                shift_date = shift_id.split(':')[-1]
+
+                # create datetime objects for start and end
+                try:
+                    start = datetime.strptime(shift_date, '%Y%m%d')
+                    end = datetime.strptime(shift_date, '%Y%m%d')
+                except ValueError as e:
+                    print(f"Error parsing shift date for day {day_number}: {e}")
+                    continue
+
+                # get the shift schedule time
+                time_text = time_element.text
+                try:
+                    start_str, _, end_str = time_text.split(' ')
+                except ValueError:
+                    print(f"Unexpected time format for day {day_number}: {time_text}")
+                    continue
+
+                try:
+                    start = _update_date_with_time(start, start_str)
+                    end = _update_date_with_time(end, end_str)
+                except ValueError as e:
+                    print(f"Error parsing time for day {day_number}: {e}")
+                    continue
+
+                # some shifts go overnight so end the next day
+                if end < start:
+                    end = end.replace(day=end.day + 1)
+
+                # Try to get location
+                try:
+                    location_element = content_div.find_elements(By.CLASS_NAME, "content-item")[-1]
+                    location = location_element.find_element(By.TAG_NAME, "strong").text
+                except (NoSuchElementException, IndexError):
+                    print(f"Could not find location for day {day_number}")
+                    continue
+
+                events.add((start, end, location))
 
             except Exception as e:
+                print(f"Unexpected error processing day: {e}")
                 continue
+
     return events
 
 
@@ -174,7 +238,22 @@ def serve_ical(pharmacy):
 
 @app.route('/update')
 def update_schedule():
-    dates = [datetime.today(), datetime.today() + timedelta(days=30)]
+    # Get all unique months between today and 30 days from now
+    start_date = datetime.today()
+    end_date = start_date + timedelta(days=30)
+    
+    dates = []
+    current_date = start_date
+    while current_date <= end_date:
+        # Create a new date object for the first of each month
+        month_date = datetime(current_date.year, current_date.month, 1)
+        if month_date not in dates:
+            dates.append(month_date)
+        # Move to the first of next month
+        if current_date.month == 12:
+            current_date = datetime(current_date.year + 1, 1, 1)
+        else:
+            current_date = datetime(current_date.year, current_date.month + 1, 1)
     events = scrape_url_to_calendar(dates)
     sorted_events = sorted(events, key=lambda x: x[0])
 
