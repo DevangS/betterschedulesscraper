@@ -63,12 +63,19 @@ def scrape_url_to_calendar(dates):
 
     # login to the website
     chrome_driver.get(LOGIN_URL)
-    username_text_field = chrome_driver.find_element(By.ID, "Username")
-    username_text_field.send_keys(USERNAME)
+    
+    # Step 1: Enter email/username
+    identifier_field = chrome_driver.find_element(By.ID, "Identifier")
+    identifier_field.send_keys(USERNAME)
+    chrome_driver.find_element(By.CSS_SELECTOR, "button[type='submit']").click()
 
-    password_text_field = chrome_driver.find_element(By.ID, "Password")
-    password_text_field.send_keys(PASSWORD)
-    chrome_driver.find_element(By.CLASS_NAME, "btn-signin").click()
+    # Step 2: Wait for password page and enter password
+    WebDriverWait(chrome_driver, 10).until(
+        EC.presence_of_element_located((By.ID, "Password"))
+    )
+    password_field = chrome_driver.find_element(By.ID, "Password")
+    password_field.send_keys(PASSWORD)
+    chrome_driver.find_element(By.CSS_SELECTOR, "button[type='submit']").click()
 
     events = set([])
     for date in dates:
