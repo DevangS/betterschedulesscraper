@@ -57,17 +57,50 @@ def scrape_url_to_calendar(dates):
     chrome_options.add_argument('--no-sandbox')
     chrome_options.add_argument("--disable-extensions")
     chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--disable-gpu")
+    chrome_options.add_argument("--disable-software-rasterizer")
     chrome_options.add_argument("--user-data-dir=/tmp/selenium")
     chrome_options.add_argument("--remote-debugging-port=9222")
-    chrome_driver = webdriver.Chrome(options=chrome_options, service=service)
+    
+    try:
+        chrome_driver = webdriver.Chrome(options=chrome_options, service=service)
+        print(f"Chrome driver initialized successfully")
+    except Exception as e:
+        print(f"Failed to initialize Chrome driver: {e}")
+        raise
 
     # login to the website
-    chrome_driver.get(LOGIN_URL)
-    
-    # Step 1: Enter email/username
-    identifier_field = chrome_driver.find_element(By.ID, "Identifier")
-    identifier_field.send_keys(USERNAME)
-    chrome_driver.find_element(By.CSS_SELECTOR, "button[type='submit']").click()
+    try:
+        print(f"Navigating to login page: {LOGIN_URL}")
+        chrome_driver.get(LOGIN_URL)
+        print(f"Current URL after navigation: {chrome_driver.current_url}")
+        
+        # Wait for page to fully load
+        WebDriverWait(chrome_driver, 15).until(
+            EC.presence_of_element_located((By.ID, "Identifier"))
+        )
+        
+        # Step 1: Enter email/username
+        identifier_field = chrome_driver.find_element(By.ID, "Identifier")
+        identifier_field.send_keys(USERNAME)
+        chrome_driver.find_element(By.CSS_SELECTOR, "button[type='submit']").click()
+        print("Username entered and form submitted")
+        
+    except Exception as e:
+        print(f"Error during login process: {e}")
+        print(f"Current URL: {chrome_driver.current_url}")
+        print(f"Page title: {chrome_driver.title}")
+        
+        # Try to find alternative selectors
+        try:
+            all_inputs = chrome_driver.find_elements(By.TAG_NAME, "input")
+            print(f"Found {len(all_inputs)} input elements on page:")
+            for i, inp in enumerate(all_inputs):
+                print(f"  Input {i+1}: id='{inp.get_attribute('id')}', name='{inp.get_attribute('name')}', type='{inp.get_attribute('type')}'")
+        except:
+            print("Could not enumerate input elements")
+        
+        raise
 
     # Step 2: Wait for password page and enter password
     WebDriverWait(chrome_driver, 10).until(
