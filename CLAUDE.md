@@ -12,6 +12,21 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Docker build: `docker build -t betterschedulesscraper .`
 - Docker run: `docker run -p 8080:8080 betterschedulesscraper`
 
+## Remote Deployment & Testing
+- **Production server**: lapew (accessible via `ssh devang@lapew`)
+- **Deploy script**: `./deploy_lapew.sh` - deploys main.py and restarts the service
+- **SSH key**: Already loaded in SSH agent (id_ed25519)
+- **Service name**: `betterschedulescraper.service`
+- **Remote path**: `/home/devang/betterschedulescraper/`
+
+### Testing Changes Autonomously
+- Since code cannot be run locally, ALWAYS test changes on lapew after making them
+- Use `ssh devang@lapew "<command>"` to run remote commands
+- Check service status: `ssh devang@lapew "sudo systemctl status betterschedulescraper.service"`
+- View logs: `ssh devang@lapew "journalctl -u betterschedulescraper.service -n 50"`
+- Restart service: `ssh devang@lapew "sudo systemctl restart betterschedulescraper.service"`
+- After deploying with `./deploy_lapew.sh`, verify the service started successfully and check logs for errors
+
 ## Code Style Guidelines
 - Use PEP 8 conventions for Python code
 - Import order: standard library, third-party, local application imports
