@@ -3,8 +3,6 @@ import pathlib
 import subprocess
 
 import pytz
-from apscheduler.executors.pool import ThreadPoolExecutor
-from apscheduler.schedulers.background import BackgroundScheduler
 from flask import Flask, Response
 import icalendar
 from selenium import webdriver
@@ -430,17 +428,6 @@ def test_email():
     except Exception as e:
         return f"Failed to send test email: {str(e)}", 500
 
-
-sched = BackgroundScheduler({
-    'apscheduler.executors.default': {
-        'class': 'apscheduler.executors.pool:ThreadPoolExecutor',
-        'max_workers': '1'
-    },
-    'apscheduler.job_defaults.coalesce': 'false',
-    'apscheduler.job_defaults.max_instances': '1',
-})
-sched.add_job(update_schedule, 'interval', minutes=300)
-sched.start()
 
 if __name__ == '__main__':
     update_schedule()
